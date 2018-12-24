@@ -153,6 +153,7 @@ double accelByAngle(double angle, double da, double location)
 
 void moveMotor()
 {
+  delayTime = 1000;
   if(delayTime < maxDelayTime && delayTime > minDelayTime - 1)
   {
     if(dir == LOW)
