@@ -7,23 +7,13 @@
    brown - Vcc, blue - GRD, black - input
 
 */
-#include <TaskScheduler.h>
 
 #include <Encoder.h>
-
-
-
-//gil was here
+#include "A4988.h"
 
 // Callback methods prototypes
 void calculateDelay();
 void moveMotor();
-
-//Tasks
-Task t1(1, TASK_FOREVER, &moveMotor);
-Task t2(10, TASK_FOREVER, &calculateDelay);
-
-Scheduler runner;
 
 
 int encoder0PinA = 2;
@@ -68,39 +58,47 @@ byte dir;
 
 unsigned long last_calc;
 
+// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
+#define MOTOR_STEPS 200
+// Target RPM for cruise speed
+#define RPM 120
+// Acceleration and deceleration values are always in FULL steps / s^2
+#define MOTOR_ACCEL 2000
+#define MOTOR_DECEL 2000
+
+// Microstepping mode. If you hardwired it to save pins, set to the same value here.
+#define MICROSTEPS 16
+
+#define MS1 10
+#define MS2 11
+#define MS3 12
+A4988 stepper(MOTOR_STEPS, 4, 5, 6, MS1, MS2, MS3);
+
 void setup() {
   //pinMode (encoder0PinA, INPUT);
   //pinMode (encoder0PinB, INPUT);
   delay(2000);
   //attachInterrupt(digitalPinToInterrupt(encoder0PinA), count, CHANGE);
 
-  pinMode(6,OUTPUT); // Enable
+  /**pinMode(6,OUTPUT); // Enable
   pinMode(5,OUTPUT); // Step
   pinMode(4,OUTPUT); // Dir
   digitalWrite(6,LOW); // Set Enable low
   digitalWrite(4,HIGH); // Set Dir high
-  dir = HIGH;
-
+  dir = HIGH;*/
+  
+  stepper.begin(RPM, MICROSTEPS);
+  stepper.enable();
   
   Serial.begin(115200);
 
   maxV = (double)MOTOR_CONST/((double)minDelayTime*1.0);
   minV = (double)MOTOR_CONST/((double)maxDelayTime*1.0);
-
-
-  /**runner.init();  
-  runner.addTask(t1);  
-  runner.addTask(t2);
-  t1.enable();
-  t2.enable();**/
   last_calc = micros();
 }
 
 void loop() 
 {
-  /**
-  runner.execute();
-  */
   
    if(cycleCounter == cyclesToRecalculate)
    {
@@ -108,11 +106,15 @@ void loop()
       cycleCounter = 0;
    }
    cycleCounter += 1;
+   stepper.setSpeedProfile(stepper.LINEAR_SPEED, a, -a);
    
    moveMotor();
 
 }
 
+/**
+ * no longer relavant
+ */
 double speedByAngle(double angle)
 {
   double rangeV = maxV - minV;
@@ -127,6 +129,9 @@ double speedByAngle(double angle)
   return returnVal;
 }
 
+/**
+ * calculate the accelaration neccesary given the current measurements
+ */
 double accelByAngle(double angle, double da, double location)
 {
   /**
@@ -137,6 +142,7 @@ double accelByAngle(double angle, double da, double location)
   double val = angle + 20*da;
   double returnVal = (maxAccel/maxVal)*val;
   */
+  // pid calculation
   double returnVal = 50*(angle+location/50) + 2*da;
   if(returnVal < 0 && dir == HIGH)
   {
@@ -151,9 +157,11 @@ double accelByAngle(double angle, double da, double location)
   return abs(returnVal);
 }
 
+/**
+ * move a step and update location
+ */
 void moveMotor()
 {
-  delayTime = 1000;
   if(delayTime < maxDelayTime && delayTime > minDelayTime - 1)
   {
     if(dir == LOW)
@@ -172,24 +180,34 @@ void moveMotor()
 }
 
 
+/**
+ * calculates the delay for the motors based on measurements
+ */
 void calculateDelay()
 {
   unsigned long now = micros();
+  // read angle using encoder
   double new_angle = ((double)myEnc.read()/(SCALE*1.0))*360.0;
+  // calc angle dev
+  // TODO: make it using mpu gyro
   double angle_dev = (new_angle - angle)/(double)(now - last_calc)*1000000.0;
   angle = new_angle;
   
   //v = speedByAngle(measurements);
 
+  // calc the current accelaration
   a = accelByAngle(angle,angle_dev,location);
   v += a*(double)(now - last_calc)/1000000.0;
+  // limit stepper velocity
   if(v > maxV)
   {
     v = maxV;
   }
   last_calc = now;
+  // transform speed to delay
   delayTime = (int)((double)MOTOR_CONST/v);
 
+  // pause in case of crash
   if(abs(angle) > emergancyStopAng)
   {
     delayTime = 10000;
