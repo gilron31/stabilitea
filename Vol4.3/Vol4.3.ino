@@ -89,7 +89,7 @@ void setup() {
   start = micros();
 
   //startCalibrate();
-  angle_offset = 27.9;
+  angle_offset = 28.05;
   doBlink();
   waitToAngle();
 }
@@ -220,7 +220,7 @@ void calculateDelay()
   v = boundV(v);
   motorDirection(v);
   delayTime = (int)((double)MOTOR_CONST/abs(v));
-  delayTime += locationConsideration(location,v);
+  //delayTime += locationConsideration(location,v);
   delayTime = boundDelayTime(delayTime);
   if(abs(angle) > EMERGANCY_STOP_ANGLE)
   {
@@ -234,7 +234,7 @@ void calculateDelay()
 
   //printing data (if wanted)
   //printData();
-  sendData();
+  //sendData();
 }
 
 /**
@@ -247,8 +247,8 @@ double calculateAcceleration(double th, double dth, double x, double dx)
   double Pconst = 10000;
   double Dconst = 1000;
   double thetaXRatio = 0.3;
-  double calculatedAngle = th - x*0.000;
-  double calculatedDev = dth;
+  double calculatedAngle = th + sign(x)*max(sign(x)*(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
+  double calculatedDev = dth - dx*0.00;
   double acceleration = Pconst*calculatedAngle + Dconst*calculatedDev;
   return acceleration;
 }
