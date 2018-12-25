@@ -84,7 +84,7 @@ void setup() {
 
   Serial.begin(115200);
   delay(1000);
-  Serial.println("started!!");
+  //Serial.println("started!!");
   last_calc = micros();
   start = micros();
 
@@ -233,7 +233,8 @@ void calculateDelay()
   last_calc = now;
 
   //printing data (if wanted)
-  printData();
+  //printData();
+  sendData();
 }
 
 /**
@@ -299,6 +300,19 @@ int locationConsideration(double location, double v)
      return -180;
   }
   return 0;
+}
+
+/**
+ * sends data using bluetooth
+ */
+void sendData()
+{
+  Serial.println('a');
+  Serial.println(angle);
+  Serial.println(v);
+  Serial.println(a);
+  Serial.println(location);
+  Serial.println(millis());
 }
 
 /**
