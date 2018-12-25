@@ -1,5 +1,4 @@
-
- /* Read Quadrature Encoder
+/* Read Quadrature Encoder
    Connect Encoder to Pins encoder0PinA, encoder0PinB, and +5V.
 
    Sketch by max wolf / www.meso.net
@@ -13,27 +12,28 @@
 #include <MPU6050.h>
 #include <Wire.h>
 
-#define in1 7
-#define in2 8
-MPU6050 accelgyro(0x68);
-int16_t ax, ay, az,gx, gy, gz;
-
+//int MPUin1 = 7;
+//int MPUin2 = 8;
+//MPU6050 accelgyro(0x68);
+//int16_t ax, ay, az,gx, gy, gz;
 int encoder0PinA = 2;
 int encoder0PinB = 3;
 Encoder myEnc(encoder0PinA, encoder0PinB);
+int driverDir = 4;
+int driverStep = 5;
+int driverEnable = 6;
 
 const double PERM_MPU_OFFSET = 0.1;
 const int MOTOR_CONST = 31400;
-const int MAX_DELAY_TIME = 3000;
+const int MAX_DELAY_TIME = 5000;
 const int MIN_DELAY_TIME = 600;
 const double MAX_V = (double)MOTOR_CONST/MIN_DELAY_TIME;
 const double MIN_V = (double)MOTOR_CONST/MAX_DELAY_TIME;
 const double MOTOR_STEP = 0.0314;
 const int SCALE = 1024*3;
 const double EMERGANCY_STOP_ANGLE = 10;
-const double MPU_CORRECTION = 2;
+const double MPU_CORRECTION = 2.5;
 const double RAIL_LENGTH = 8;
-
 const int MEASURES_TO_CALIBRATE = 200;
 const int CYCLES_TO_RECALCULATE = 10;
 
@@ -45,56 +45,31 @@ double location;          //locatiob[cm]
 double last_location;     //velocity of cart[cm/sec]
 int delayTime;            //delay between motor steps [microsec]
 byte dir;                 //direction of motor
-
+bool nowCalibrating;
+bool stopCalibrating;
+unsigned long lastCalib;
 unsigned long start;      //time of starting the program [microsec]
 unsigned long last_calc;  //time of doing last control calculation [microsec]
 
-// runtime calibration variables
-
-bool nowCalibrating = false;
-bool stopCalibrating = false;
-unsigned long lastCalib;
-
-
-/*
-double g = 980;             //moment of inertia [cm/sec^2]
-double M = 0.3;             //mass of cart [Kg]
-double mStick = 0.2;        //mass of stick [Kg]
-double mEnd = 0.2;          //mass of top of stick [Kg]
-double l = 100.0;           //length of stick [cm]
-double b = 0.1;             //friction of cart [Kg/sec]
-double I = mStick*l*l/12 + mStick*l*l/8 + mEnd*l/2;
-double m = mStick + mEnd;
-double q = ((M+m)*(I+m*l*l)-m*m*l*l);
-double A = (b/q)*(I + m*l*l);
-double B = -(M+m)*m*g*l/q;
-double C = -b*m*g*l/q;
-double D = m*l/q;
-*/
 
 void setup() {
   
-  Wire.begin();
-  TWBR = 24;
-  accelgyro.initialize();
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  digitalWrite(in1, LOW);
-  digitalWrite(in2, HIGH);
+  //Wire.begin();
+  //TWBR = 24;
+  //accelgyro.initialize();
+  //pinMode(MPUin1, OUTPUT);
+  //pinMode(MPUin2, OUTPUT);
+  pinMode(driverEnable,OUTPUT); 
+  pinMode(driverStep,OUTPUT); 
+  pinMode(driverDir,OUTPUT); 
+  pinMode(LED_BUILTIN, OUTPUT);
   //while (Serial.available() && Serial.read());
-  pinMode(6,OUTPUT); // Enable
-  pinMode(5,OUTPUT); // Step
-  pinMode(4,OUTPUT); // Dir
-  digitalWrite(6,LOW); // Set Enable low
-  digitalWrite(4,HIGH); // Set Dir high
+  //digitalWrite(MPUin1, LOW);
+  //digitalWrite(MPUin1, HIGH);
+  digitalWrite(driverEnable,LOW); 
+  digitalWrite(driverDir,HIGH); 
 
-  //setting the MPU's offset according to previous calculations
-  accelgyro.setXAccelOffset(-792);
-  accelgyro.setYAccelOffset(717);
-  accelgyro.setZAccelOffset(888);
-  accelgyro.setXGyroOffset(-68);
-  accelgyro.setYGyroOffset(-35);
-  accelgyro.setZGyroOffset(22);
+  //setGyroOffsets();
     
   v = 0;
   a = 0;
@@ -104,28 +79,35 @@ void setup() {
   last_location = 0;
   delayTime = 0;
   dir = HIGH;
+  nowCalibrating = false;
+  stopCalibrating = false;
 
-  delay(5000);
-  
   Serial.begin(115200);
   delay(1000);
   Serial.println("started!!");
   last_calc = micros();
   start = micros();
 
-  startCalibrate();
+  //startCalibrate();
+  angle_offset = 27.9;
+  doBlink();
+  waitToAngle();
 }
 
+/*
 
-void loop() 
+void setGyroOffsets()
 {
-  for(int i = 0; i < CYCLES_TO_RECALCULATE; i++)
-  {
-    moveMotor();
-  }
-  calculateDelay();
+  accelgyro.setXAccelOffset(-792);
+  accelgyro.setYAccelOffset(717);
+  accelgyro.setZAccelOffset(888);
+  accelgyro.setXGyroOffset(-68);
+  accelgyro.setYGyroOffset(-35);
+  accelgyro.setZGyroOffset(22);
 }
+*/
 
+/*
 void startCalibrate()
 {
   for(int i = 0; i < MEASURES_TO_CALIBRATE; i++)
@@ -135,9 +117,42 @@ void startCalibrate()
     angle_offset += temporary / (double)MEASURES_TO_CALIBRATE;
     delay(2);
   }
+  if(angle_offset > 300)
+  {
+    angle_offset = angle_offset - 360;
+  }
   angle_offset = angle_offset - MPU_CORRECTION;
+  Serial.println("angle offset by MPU :");
   Serial.println(angle_offset);
-  
+}
+*/
+
+void doBlink()
+{
+  for(int i = 0; i < 10; i++)
+  {
+    digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+    delay(100);                       // wait for a second
+    digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+    delay(100);
+  }
+}
+
+void waitToAngle()
+{
+  while(abs(getAngle()) >= 0.2)
+  {
+    delay(100);
+  }
+}
+
+void loop() 
+{
+  for(int i = 0; i < CYCLES_TO_RECALCULATE; i++)
+  {
+    moveMotor();
+  }
+  calculateDelay();
 }
 
 void moveMotor()
@@ -152,13 +167,16 @@ void moveMotor()
     {
       location += MOTOR_STEP;
     }
-    digitalWrite(5,HIGH);
+    digitalWrite(driverStep,HIGH);
     delayMicroseconds(delayTime);
-    digitalWrite(5,LOW);
+    digitalWrite(driverStep,LOW);
     delayMicroseconds(delayTime);
   }
+  else
+  {
+    delayMicroseconds(MIN_DELAY_TIME*2);
+  }
 }
-
 
 
 void calculateDelay()
@@ -166,15 +184,15 @@ void calculateDelay()
   // calculate angle, angular velocity, location and speed
   unsigned long now = micros();
   double timeDiff = (double)(now - last_calc)/1000000.0;
-  double new_angle = ((double)myEnc.read()/(SCALE*1.0))*360.0 + angle_offset;
+  double new_angle = getAngle();
   double angle_dev = (new_angle - angle)/timeDiff;
   angle = new_angle;
   double location_dev = (location - last_location)/timeDiff;
   last_location = location;
 
+/*
   // run time calibration
-
-  if(!stopCalibrating && !nowCalibrating && location < RAIL_LENGTH*2.0/5.0)
+  if(!stopCalibrating && !nowCalibrating && abs(location) < RAIL_LENGTH*2.0/5.0)
   {
     nowCalibrating = true;
     lastCalib = now;
@@ -194,23 +212,22 @@ void calculateDelay()
     Serial.println(angle_offset);
     Serial.println("#################################");
   }
-
-
-  // end of runtime calibration
-
-
+*/
+  
   //calculated wanted delay time by the previous parameters
   a = calculateAcceleration(angle,angle_dev,location,location_dev);
   v += a*timeDiff;
   v = boundV(v);
   motorDirection(v);
   delayTime = (int)((double)MOTOR_CONST/abs(v));
-  delayTime = boundDelay(delayTime);
+  delayTime += locationConsideration(location,v);
+  delayTime = boundDelayTime(delayTime);
   if(abs(angle) > EMERGANCY_STOP_ANGLE)
   {
     double timeFromStart = (double)(now - start)/1000000.0;
-    Serial.println(timeFromStart);
-    delay(10000);
+    //Serial.print("time of session: ");
+    //Serial.println(timeFromStart);
+    delay(20000);
   }
 
   last_calc = now;
@@ -227,18 +244,10 @@ double calculateAcceleration(double th, double dth, double x, double dx)
   th = angleToRad(th);
   dth = angleToRad(dth);
   double Pconst = 10000;
-  double Dconst = 3000;
+  double Dconst = 1000;
   double thetaXRatio = 0.3;
-  double calculatedAngle = th;
-  if(x > RAIL_LENGTH*(2/5) && x < RAIL_LENGTH*(3/5))
-  {
-    calculatedAngle += 0.00;
-  }
-  if(x < -RAIL_LENGTH*(2/5) && x > -RAIL_LENGTH*(3/5))
-  {
-    calculatedAngle -= 0.00;
-  }
-  double calculatedDev = dth - dx*0;
+  double calculatedAngle = th - x*0.000;
+  double calculatedDev = dth;
   double acceleration = Pconst*calculatedAngle + Dconst*calculatedDev;
   return acceleration;
 }
@@ -251,12 +260,12 @@ double motorDirection(double v)
 {
   if(v < 0 && dir == HIGH)
   {
-    digitalWrite(4,LOW);
+    digitalWrite(driverDir,LOW);
     dir = LOW;
   }
   if(v > 0 && dir == LOW)
   {
-    digitalWrite(4,HIGH);
+    digitalWrite(driverDir,HIGH);
     dir = HIGH;
   }
 }
@@ -274,22 +283,29 @@ double boundV(double v)
   return v;
 }
 
-int boundDelay(int dT)
+double boundDelayTime(double dT)
 {
-  if(dT > MAX_DELAY_TIME)
+  if(dT < MIN_DELAY_TIME)
   {
-    dT = MAX_DELAY_TIME;
+    return MIN_DELAY_TIME;
   }
   return dT;
 }
 
+int locationConsideration(double location, double v)
+{
+  if(abs(location) > RAIL_LENGTH*(PI/14.5) && sign(location) == sign(v))
+  {
+     return -180;
+  }
+  return 0;
+}
 
 /**
  * prints relevant data
  */
 void printData()
 {
-  /*
     Serial.print("angle: ");
     Serial.print(angle);   
     Serial.print(" velocity: ");
@@ -297,8 +313,7 @@ void printData()
     Serial.print(" acceleration: ");
     Serial.print(a);
     Serial.print(" delay time: ");
-    Serial.println(delayTime);
-    */
+    Serial.print(delayTime);
     Serial.print(" location: ");
     Serial.println(location);
 }
@@ -315,4 +330,9 @@ int sign(double x)
 double angleToRad(double x)
 {
   return (x*PI)/180;
+}
+
+double getAngle()
+{
+  return ((double)myEnc.read()/(SCALE*1.0))*360.0 + angle_offset;
 }
