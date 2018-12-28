@@ -116,14 +116,14 @@ void loop()
   calculateDelay();
   endCalculation = micros();
   calcTime = endCalculation - startCalculation;
-  sumCalc += calcTime;
+  /**sumCalc += calcTime;
   if(numCalcs % 100 == 0)
   {
     Serial.println(sumCalc/numCalcs);
-  }
+  }*/
   if(calcTime < delayTime)
   {
-    delayMicroseconds(delayTime-calcTime + 10);
+    delayMicroseconds(delayTime - calcTime);
   }
 }
 
@@ -152,7 +152,7 @@ void moveMotor()
 
 void calculateDelay()
 {
-  numCalcs++;
+  //numCalcs++;
   // calculate angle, angular velocity, location and speed
   unsigned long now = micros();
   double timeDiff = (double)(now - last_calc)/1000000.0;
@@ -184,16 +184,17 @@ void calculateDelay()
 /**
  * gets relevent parameters on the system (P,D) and returns the wanted acceleration
  */
-double calculateAcceleration(double th, double dth, double x, double dx)
+double calculateAcceleration(double th, double dth, double x, double dx, double intx)
 {
   th = angleToRad(th);
   dth = angleToRad(dth);
   double Pconst = 5000;
   double Dconst = 500;
   double thetaXRatio = 0.3;
-//  double calculatedAngle = th + sign(x)*max(sign(x)*(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
-  double calculatedAngle = th;
-  double calculatedDev = dth - dx*0.00;
+//  double calculatedAngle = th + sign(x)max(sign(x)(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
+//  double calculatedAngle = th;
+  double calculatedAngle = th + x*0.001; //good: 0.003/2/1
+  double calculatedDev = dth + dx*0.006; // good: 0.005/6
   double acceleration = Pconst*calculatedAngle + Dconst*calculatedDev;
   return acceleration;
 }
