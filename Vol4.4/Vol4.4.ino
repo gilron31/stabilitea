@@ -47,7 +47,7 @@ double location_dev;      //velocity of cart[cm/sec]
 int delayTime;            //delay between motor steps [microsec]
 byte dir;                 //direction of motor
 unsigned long last_calc;  //time of doing last control calculation [microsec]
-unsigned long startCalculation, endCalculation, calcTime;
+unsigned long startCalculation, endCalculation, calcTime, sumCalc, numCalcs;
 
 
 void setup() {
@@ -70,6 +70,8 @@ void setup() {
   last_location = 0;
   location_dev = 0;
   delayTime = 0;
+  numCalcs = 0;
+  sumCalc = 0;
   dir = HIGH;
 
   Serial.begin(115200);
@@ -114,6 +116,11 @@ void loop()
   calculateDelay();
   endCalculation = micros();
   calcTime = endCalculation - startCalculation;
+  sumCalc += calcTime;
+  if(numCalcs % 100 == 0)
+  {
+    Serial.println(sumCalc/numCalcs);
+  }
   if(calcTime < delayTime)
   {
     delayMicroseconds(delayTime-calcTime + 10);
@@ -145,6 +152,7 @@ void moveMotor()
 
 void calculateDelay()
 {
+  numCalcs++;
   // calculate angle, angular velocity, location and speed
   unsigned long now = micros();
   double timeDiff = (double)(now - last_calc)/1000000.0;
@@ -252,21 +260,23 @@ void printData()
     //Serial.print(angle);
     //Serial.print(" angle V: ");
     //Serial.print(angle_dev);    
-    Serial.print(" v: ");
-    Serial.print(v);
+    //Serial.print(" v: ");
+    //Serial.print(v);
     //Serial.print(" a: ");
     //Serial.print(a);
     //Serial.print(" delay time: ");
     //Serial.print(delayTime);
     //Serial.print(" location: ");
     //Serial.print(location);
-    BTSerial.println("a");
+    String message = String("a\n") + String(angle)+String('\n')+String(angle_dev)+String('\n')+String(location)+String('\n')+String(location_dev)+String('\n')+String(a)+String('\n')+String(millis())+String('\n');
+    BTSerial.println(message);
+    /**BTSerial.println("a");
     BTSerial.println(angle);
     BTSerial.println(angle_dev);
     BTSerial.println(location);
     BTSerial.println(location_dev);
     BTSerial.println(a);
-    BTSerial.println(millis());
+    BTSerial.println(millis());*/
 }
 
 int sign(double x)
