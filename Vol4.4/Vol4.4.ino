@@ -12,9 +12,9 @@
 //#include <I2Cdev.h>
 //#include <MPU6050.h>
 #include <Wire.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
 
-SoftwareSerial BTSerial(8, 9); // RX | TX
+//SoftwareSerial BTSerial(8, 9); // RX | TX
 int encoder0PinA = 2;
 int encoder0PinB = 3;
 Encoder myEnc(encoder0PinA, encoder0PinB);
@@ -44,10 +44,11 @@ double angle_offset;      //offset at the start [degrees]
 double location;          //locatiob[cm]
 double last_location;     //previous location
 double location_dev;      //velocity of cart[cm/sec]
+double intpos;            //integral of position
 int delayTime;            //delay between motor steps [microsec]
 byte dir;                 //direction of motor
 unsigned long last_calc;  //time of doing last control calculation [microsec]
-unsigned long startCalculation, endCalculation, calcTime, sumCalc, numCalcs;
+unsigned long startCalculation, endCalculation, calcTime;
 
 
 void setup() {
@@ -58,7 +59,7 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(driverEnable,LOW); 
   digitalWrite(driverDir,HIGH); 
-  BTSerial.begin(115200);   
+  //BTSerial.begin(115200);   
 
     
   v = 0;
@@ -66,20 +67,20 @@ void setup() {
   angle = 0;
   angle_dev = 0;
   angle_offset = 0;
+  
   location = 0;
   last_location = 0;
   location_dev = 0;
   delayTime = 0;
-  numCalcs = 0;
-  sumCalc = 0;
   dir = HIGH;
+  intpos =0 ;
 
   Serial.begin(115200);
   delay(1000);
   Serial.println("started!!");
   last_calc = micros();
 
-  angle_offset = 29.35;
+  angle_offset = 29.50;
   doBlink();
   waitToAngle();
 }
@@ -116,14 +117,9 @@ void loop()
   calculateDelay();
   endCalculation = micros();
   calcTime = endCalculation - startCalculation;
-  /**sumCalc += calcTime;
-  if(numCalcs % 100 == 0)
-  {
-    Serial.println(sumCalc/numCalcs);
-  }*/
   if(calcTime < delayTime)
   {
-    delayMicroseconds(delayTime - calcTime);
+    delayMicroseconds(delayTime-calcTime + 10);
   }
 }
 
@@ -152,7 +148,6 @@ void moveMotor()
 
 void calculateDelay()
 {
-  //numCalcs++;
   // calculate angle, angular velocity, location and speed
   unsigned long now = micros();
   double timeDiff = (double)(now - last_calc)/1000000.0;
@@ -161,9 +156,9 @@ void calculateDelay()
   angle = new_angle;
   location_dev = (location - last_location)/timeDiff;
   last_location = location;
-  
+  intpos= intpos + timeDiff*location;
   //calculated wanted delay time by the previous parameters
-  a = calculateAcceleration(angle,angle_dev,location,location_dev);
+  a = calculateAcceleration(angle,angle_dev,location,location_dev,intpos);
   v += a*timeDiff;
   v = boundV(v);
   motorDirection(v);
@@ -191,7 +186,7 @@ double calculateAcceleration(double th, double dth, double x, double dx, double 
   double Pconst = 5000;
   double Dconst = 500;
   double thetaXRatio = 0.3;
-//  double calculatedAngle = th + sign(x)max(sign(x)(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
+//  double calculatedAngle = th + sign(x)*max(sign(x)*(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
 //  double calculatedAngle = th;
   double calculatedAngle = th + x*0.001; //good: 0.003/2/1
   double calculatedDev = dth + dx*0.006; // good: 0.005/6
@@ -261,23 +256,21 @@ void printData()
     //Serial.print(angle);
     //Serial.print(" angle V: ");
     //Serial.print(angle_dev);    
-    //Serial.print(" v: ");
-    //Serial.print(v);
+    Serial.print(" v: ");
+    Serial.print(v);
     //Serial.print(" a: ");
     //Serial.print(a);
     //Serial.print(" delay time: ");
     //Serial.print(delayTime);
     //Serial.print(" location: ");
     //Serial.print(location);
-    String message = String("a\n") + String(angle)+String('\n')+String(angle_dev)+String('\n')+String(location)+String('\n')+String(location_dev)+String('\n')+String(a)+String('\n')+String(millis())+String('\n');
-    BTSerial.println(message);
-    /**BTSerial.println("a");
-    BTSerial.println(angle);
-    BTSerial.println(angle_dev);
-    BTSerial.println(location);
-    BTSerial.println(location_dev);
-    BTSerial.println(a);
-    BTSerial.println(millis());*/
+    //BTSerial.println("a");
+    //BTSerial.println(angle);
+    //BTSerial.println(angle_dev);
+    //BTSerial.println(location);
+    //BTSerial.println(location_dev);
+    //BTSerial.println(a);
+    //BTSerial.println(millis());
 }
 
 int sign(double x)
