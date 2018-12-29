@@ -12,7 +12,7 @@
 //#include <I2Cdev.h>
 //#include <MPU6050.h>
 #include <Wire.h>
-//#include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
 
 //SoftwareSerial BTSerial(8, 9); // RX | TX
 int encoder0PinA = 2;
@@ -30,11 +30,11 @@ const double MAX_V = (double)MOTOR_CONST/MIN_DELAY_TIME;
 const double MIN_V = (double)MOTOR_CONST/MAX_DELAY_TIME;
 const double MOTOR_STEP = 0.0314;
 const int SCALE = 1024*3;
-const double EMERGANCY_STOP_ANGLE = 10;  
+const double EMERGANCY_STOP_ANGLE = 8;//was 10 but long stub only gives 8.40  
 const double MPU_CORRECTION = 2.5;
 const double RAIL_LENGTH = 8;
 const int MEASURES_TO_CALIBRATE = 200;
-const int CYCLES_TO_RECALCULATE = 10;
+const int CYCLES_TO_RECALCULATE = 1;
 
 double v;                 //wanted velocity [cm/sec]
 double a;                 //wanted acceleration [cm/sec^2]
@@ -80,7 +80,8 @@ void setup() {
   Serial.println("started!!");
   last_calc = micros();
 
-  angle_offset = 29.50;
+//  angle_offset = 28.40;///short stub 28.40
+  angle_offset = -8.40;///long stub -8.40
   doBlink();
   waitToAngle();
 }
@@ -187,9 +188,11 @@ double calculateAcceleration(double th, double dth, double x, double dx, double 
   double Dconst = 500;
   double thetaXRatio = 0.3;
 //  double calculatedAngle = th + sign(x)*max(sign(x)*(x-RAIL_LENGTH*PI/25.0), 0)*0.0003;
-//  double calculatedAngle = th;
-  double calculatedAngle = th + x*0.001; //good: 0.003/2/1
+
+  double calculatedAngle = th + x*0.001+intx*0.0003; //good: 0.003/2/1, int 0.0003
   double calculatedDev = dth + dx*0.006; // good: 0.005/6
+//    double calculatedAngle = th;
+//  double calculatedDev = dth;
   double acceleration = Pconst*calculatedAngle + Dconst*calculatedDev;
   return acceleration;
 }
